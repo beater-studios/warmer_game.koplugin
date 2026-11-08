@@ -44,6 +44,7 @@ Cada palpite recebe uma posição num ranking de proximidade de sentido com a pa
 - **Três idiomas:** português, inglês e espanhol, cada um com as próprias palavras. A interface segue o idioma escolhido.
 - **Estatísticas:** sequência, vitórias e média de palpites por idioma.
 - **Compartilhar:** o resultado da palavra do dia vira um QR code que mostra o quanto os palpites chegaram perto, sem revelar nenhuma palavra.
+- **Tela de descanso:** se o aparelho dorme com o jogo aberto, aparece a capa do Warmer no lugar da capa do livro. Vale quando a tela de descanso do KOReader mostra a capa do livro.
 - **Sem internet:** funciona offline e não coleta dados. O progresso é salvo a cada palpite.
 
 ## Instalação

@@ -27,6 +27,7 @@ How the game works inside, for anyone who wants to understand the code or change
 - **Home:** language, current streak, the daily word (play, continue or see the result), free play, statistics, how to play, about and exit.
 - **Game:** a header with Back, the mode and the latest message; Hint and Give Up; the line with the word being typed; the latest guess highlighted; the guess and hint counts; the list sorted by position, paginated; the keyboard at the bottom. On a 600x800 screen the list shows 8 guesses per page.
 - **End:** the same screen with Share, Closest Words and Statistics for the daily word, or New Word and Closest Words in free play. When the player gave up, the highlight shows the secret word at position 1.
+- **Sleep screen:** if the device sleeps with the game open and the KOReader sleep screen is set to the book cover, `assets/screensaver.png` shows instead. The game wraps KOReader's `Screensaver.setup`: KOReader picks the image as usual, and the game swaps it only when its screen is the topmost full-screen window. Nothing is saved, so closing the game brings back the book cover. Powering off, restarting or any other sleep screen mode are left alone. The image is 1200x1600, twice 600x800, so it stays sharp on larger screens; on 600x800 KOReader halves it.
 
 The game draws its own keyboard instead of using KOReader's input dialog, which covered the list (decision of 2026-11-07, after trying the dialog on the Kindle and comparing three options in the emulator). Each key press refreshes only the line of the typed word; sending a guess refreshes the whole screen. When the game ends the keyboard goes away and the list takes the space.
 
@@ -91,9 +92,11 @@ warmer_game.koplugin/
     vectors.lua           loads vectors.bin and computes the ranking (LuaJIT FFI)
     ui/screen.lua         home, data loading, guess dialog, statistics, help and about
     ui/game_view.lua      game screen, drawn directly
+    screensaver.lua       game cover on the sleep screen
   data/
     i18n.lua              text in the three languages
     <language>/           words.txt, secrets.txt, vectors.bin
+  assets/screensaver.png  full-screen cover, 1200x1600
   tools/, tests/, docs/   development, outside the published package
 ```
 
@@ -109,8 +112,8 @@ The game screen is a single widget that draws the header, buttons, highlight, li
 - `luajit tests/engine_spec.lua`: engine tests (accents, plurals in the three languages, repeats, hints, give up, saving and restoring, daily word, free play draw, streak, shared result).
 - `luajit tests/vectors_spec.lua`: loading of `vectors.bin`, damaged files, the secret word first, the selection used by distant hints against the sorted list, and the one-pass positions against the single ones.
 - `tools/package.sh`: builds the three zips and their checksums from `build/`. Requires `LICENSE` and `NOTICE`.
-- With `KOREADER_DIR` pointing to a desktop KOReader: `tools/koreader/run_emulator.sh` opens the game in a window, and `tools/koreader/check_all_sizes.sh` plays all three languages through taps and the guess dialog at four screen sizes. With `OUTPUT_DIR`, `tools/koreader/run_headless.sh` and the scripts in that folder save screenshots; `render_screens.lua` makes the README ones, with a secret word that is not a daily word.
-- `KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py` draws the icon, the README banner and the GitHub social preview (`docs/social-preview.png`) from the README screenshots, in the same style as the other Beater Studios plugins. Run `render_screens.lua` first. Needs Pillow.
+- With `KOREADER_DIR` pointing to a desktop KOReader: `tools/koreader/run_emulator.sh` opens the game in a window, and `tools/koreader/check_all_sizes.sh` plays all three languages through taps and the guess dialog at four screen sizes. With `OUTPUT_DIR`, `tools/koreader/run_headless.sh` and the scripts in that folder save screenshots; `render_screens.lua` makes the README ones, with a secret word that is not a daily word, and `check_screensaver.lua` checks when the game cover replaces the sleep screen image.
+- `KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py` draws the icon, the README banner and the GitHub social preview (`docs/social-preview.png`) from the README screenshots, in the same style as the other Beater Studios plugins. Run `render_screens.lua` first. Needs Pillow. With `screensaver` as argument it draws `assets/screensaver.png` instead, in the same style.
 
 The emulator does not show what is specific to e-ink, nor the device speed: the final check is on a real device.
 

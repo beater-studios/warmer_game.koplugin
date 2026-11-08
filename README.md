@@ -44,6 +44,7 @@ Each guess gets a position in a ranking of closeness in meaning to the secret wo
 - **Three languages:** Portuguese, English and Spanish, each with its own words. The interface follows the language you pick.
 - **Statistics:** streak, wins and average guesses by language.
 - **Sharing:** the daily result becomes a QR code that shows how close your guesses got, without revealing any word.
+- **Sleep screen:** if the device sleeps with the game open, it shows the Warmer cover instead of the book cover. This applies when the KOReader sleep screen is set to show the book cover.
 - **No internet:** it works offline and collects no data. Progress is saved after every guess.
 
 ## Installation

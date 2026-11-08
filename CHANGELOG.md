@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.1]
+
+- The Warmer cover on the sleep screen while the game is open.
+
 ## [0.1.0]
 
 First version.

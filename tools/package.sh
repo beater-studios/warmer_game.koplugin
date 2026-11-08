@@ -21,7 +21,7 @@ for dims in 100 150 300; do
     done
     stage="dist/stage-$dims/$name"
     mkdir -p "$stage/data"
-    cp -R _meta.lua main.lua LICENSE NOTICE warmer_game "$stage/"
+    cp -R _meta.lua main.lua LICENSE NOTICE warmer_game assets "$stage/"
     cp data/i18n.lua "$stage/data/"
     for lang in pt en es; do
         mkdir -p "$stage/data/$lang"
