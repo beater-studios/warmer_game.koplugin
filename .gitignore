@@ -4,3 +4,4 @@ data/*/vectors.bin
 dist/
 __pycache__/
 *.pyc
+.DS_Store

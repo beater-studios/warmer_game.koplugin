@@ -110,6 +110,7 @@ The game screen is a single widget that draws the header, buttons, highlight, li
 - `luajit tests/vectors_spec.lua`: loading of `vectors.bin`, damaged files, the secret word first, the selection used by distant hints against the sorted list, and the one-pass positions against the single ones.
 - `tools/package.sh`: builds the three zips and their checksums from `build/`. Requires `LICENSE` and `NOTICE`.
 - With `KOREADER_DIR` pointing to a desktop KOReader: `tools/koreader/run_emulator.sh` opens the game in a window, and `tools/koreader/check_all_sizes.sh` plays all three languages through taps and the guess dialog at four screen sizes. With `OUTPUT_DIR`, `tools/koreader/run_headless.sh` and the scripts in that folder save screenshots; `render_screens.lua` makes the README ones, with a secret word that is not a daily word.
+- `KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py` draws the icon, the README banner and the GitHub social preview (`docs/social-preview.png`) from the README screenshots, in the same style as the other Beater Studios plugins. Run `render_screens.lua` first. Needs Pillow.
 
 The emulator does not show what is specific to e-ink, nor the device speed: the final check is on a real device.
 
