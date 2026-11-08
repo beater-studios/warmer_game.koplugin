@@ -1,0 +1,6 @@
+build/
+data/*/vectors.bin
+.ko-home/
+dist/
+__pycache__/
+*.pyc
