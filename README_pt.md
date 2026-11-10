@@ -63,7 +63,7 @@ Cada release tem três pacotes. O jogo é o mesmo; muda só o tamanho dos dados 
 
 Para trocar de pacote, extraia outro por cima da mesma pasta. As partidas em andamento continuam, com as posições recalculadas. A tela Sobre mostra quais dados estão instalados, e o resultado compartilhado também, para você saber se está comparando o mesmo ranking.
 
-O progresso fica em `koreader/settings/warmer_game.lua`. Para desinstalar, apague a pasta do plugin e, se quiser, esse arquivo.
+O progresso fica em `koreader/settings/warmer_game.lua`, e o KOReader guarda a versão anterior ao lado, como `warmer_game.lua.old`. Para desinstalar, apague a pasta do plugin e, se quiser, esses dois arquivos.
 
 ## Como funciona
 
@@ -92,12 +92,10 @@ As regras, o processo dos dados e as medições estão em [docs/design.md](docs/
 
 ## Desenvolvimento
 
-Com o [LuaJIT](https://luajit.org) instalado, a partir da raiz do repositório:
+Com o [LuaJIT](https://luajit.org) instalado, a partir da raiz do repositório, as mesmas conferências da CI:
 
 ```sh
-luajit tools/validate_data.lua --no-vectors
-luajit tests/engine_spec.lua
-luajit tests/vectors_spec.lua
+sh tools/check.sh
 ```
 
 Os dados de sentido não ficam no repositório: `tools/data/fetch_sources.sh` baixa as fontes em versões fixas e `tools/data/build_data.py` gera os dados. As regras, os dados, as demais ferramentas e o processo de release estão em [docs/design.md](docs/design.md), em inglês. Para sugerir a remoção de uma palavra, abra uma issue. Contribuições são aceitas sob a licença do projeto.

@@ -1,28 +1,13 @@
+local Calendar = require("warmer_game/calendar")
+local Letters = require("warmer_game/letters")
+
 local Engine = {}
 Engine.__index = Engine
 
 Engine.HINT_START = 300
 Engine.SHARE_RANGES = { 100, 1000 }
 
-local EPOCH_DAY = 20454 -- 2026-01-01
-
-local ACCENTS = {
-    ["á"] = "a", ["à"] = "a", ["â"] = "a", ["ã"] = "a", ["ä"] = "a",
-    ["é"] = "e", ["ê"] = "e", ["è"] = "e", ["ë"] = "e",
-    ["í"] = "i", ["î"] = "i", ["ì"] = "i", ["ï"] = "i",
-    ["ó"] = "o", ["ô"] = "o", ["õ"] = "o", ["ò"] = "o", ["ö"] = "o",
-    ["ú"] = "u", ["û"] = "u", ["ù"] = "u", ["ü"] = "u",
-    ["ç"] = "c", ["ñ"] = "n",
-}
 local KEPT_LETTERS = { es = { ["ñ"] = true } }
-local LOWER = {
-    ["Á"] = "á", ["À"] = "à", ["Â"] = "â", ["Ã"] = "ã", ["Ä"] = "ä",
-    ["É"] = "é", ["Ê"] = "ê", ["È"] = "è", ["Ë"] = "ë",
-    ["Í"] = "í", ["Î"] = "î", ["Ì"] = "ì", ["Ï"] = "ï",
-    ["Ó"] = "ó", ["Ô"] = "ô", ["Õ"] = "õ", ["Ò"] = "ò", ["Ö"] = "ö",
-    ["Ú"] = "ú", ["Û"] = "û", ["Ù"] = "ù", ["Ü"] = "ü",
-    ["Ç"] = "ç", ["Ñ"] = "ñ",
-}
 -- Same rules as tools/data/build_data.py, so a plural typed by the player finds the singular kept in the vocabulary.
 -- "after" limits a rule to singulars with that ending, as in each grammar: flores from flor, but leves from leve.
 local VOWELS = { a = true, e = true, i = true, o = true, u = true, ["á"] = true, ["é"] = true, ["í"] = true, ["ó"] = true,
@@ -40,13 +25,9 @@ local PLURALS = {
 }
 local MINIMUM_SINGULAR_LETTERS = 3
 
-function Engine.split(word)
-    local letters = {}
-    for char in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-        letters[#letters + 1] = char
-    end
-    return letters
-end
+Engine.split = Letters.split
+Engine.lower = Letters.lower
+Engine.upper = Letters.upper
 
 local function ends_as(singular, after)
     if not after then
@@ -84,23 +65,7 @@ function Engine.singulars(word, lang)
 end
 
 function Engine.plain(word, lang)
-    if not word:find("[\128-\255]") then
-        return word
-    end
-    local kept = KEPT_LETTERS[lang] or {}
-    local out = {}
-    for _, char in ipairs(Engine.split(word)) do
-        out[#out + 1] = (not kept[char] and ACCENTS[char]) or char
-    end
-    return table.concat(out)
-end
-
-function Engine.lower(text)
-    local out = {}
-    for _, char in ipairs(Engine.split(text)) do
-        out[#out + 1] = LOWER[char] or char:lower()
-    end
-    return table.concat(out)
+    return Letters.plain(word, KEPT_LETTERS[lang])
 end
 
 function Engine.clean(input)
@@ -136,48 +101,22 @@ function Engine.resolve(lexicon, input)
     return nil, "unknown"
 end
 
--- Civil date to day count, so the result does not depend on the time zone or daylight saving.
-function Engine.day_number(date)
-    local year = date.month <= 2 and date.year - 1 or date.year
-    local era = math.floor(year / 400)
-    local year_of_era = year - era * 400
-    local shifted_month = date.month > 2 and date.month - 3 or date.month + 9
-    local day_of_year = math.floor((153 * shifted_month + 2) / 5) + date.day - 1
-    local day_of_era = year_of_era * 365 + math.floor(year_of_era / 4) - math.floor(year_of_era / 100) + day_of_year
-    return era * 146097 + day_of_era - 719468 - EPOCH_DAY
-end
+Engine.day_number = Calendar.day_number
+Engine.secret_for_day = Calendar.of_day
+Engine.current_streak = Calendar.current_streak
 
+-- Read at call time, so tests and screenshots can fix the day by replacing Engine.today.
 function Engine.today()
-    return Engine.day_number(os.date("*t"))
-end
-
-function Engine.secret_for_day(secrets, day)
-    return secrets[day % #secrets + 1]
+    return Calendar.today()
 end
 
 -- Free play shares the secret list, so it skips the daily words of the coming days and the ones played recently.
 function Engine.free_avoided(secrets, today, upcoming_days, recent)
-    local avoided = {}
-    for day = today, today + upcoming_days do
-        avoided[Engine.secret_for_day(secrets, day)] = true
-    end
-    for _, word in ipairs(recent) do
-        avoided[word] = true
-    end
-    return avoided
+    return Calendar.avoided(secrets, today, upcoming_days, recent)
 end
 
 function Engine.pick_free(secrets, avoided, random)
-    local candidates = {}
-    for _, word in ipairs(secrets) do
-        if not avoided[word] then
-            candidates[#candidates + 1] = word
-        end
-    end
-    if #candidates == 0 then
-        candidates = secrets
-    end
-    return candidates[random(#candidates)]
+    return Calendar.pick_free(secrets, avoided, random)
 end
 
 -- 1 for the secret word, 0 for the last word of the vocabulary, on a log scale to spread the close positions.
@@ -335,33 +274,18 @@ function Engine:restore(saved)
 end
 
 function Engine.new_stats()
-    return { played = 0, won = 0, streak = 0, best_streak = 0, last_day = nil, guesses_total = 0, hints_total = 0 }
-end
-
-function Engine.record_result(stats, day, won, guesses, hints)
-    if stats.last_day == day then
-        return stats
-    end
-    stats.played = stats.played + 1
-    if won then
-        stats.won = stats.won + 1
-        stats.streak = stats.last_day == day - 1 and stats.streak + 1 or 1
-        stats.best_streak = math.max(stats.best_streak, stats.streak)
-        stats.guesses_total = stats.guesses_total + guesses
-        stats.hints_total = stats.hints_total + hints
-    else
-        stats.streak = 0
-    end
-    stats.last_day = day
+    local stats = Calendar.new_stats()
+    stats.guesses_total, stats.hints_total = 0, 0
     return stats
 end
 
--- The saved streak only changes when a game ends, so a missed day has to be checked when showing it.
-function Engine.current_streak(stats, today)
-    if stats.last_day and today - stats.last_day > 1 then
-        return 0
+-- Each day is recorded once, and the guess and hint totals only grow when it was.
+function Engine.record_result(stats, day, won, guesses, hints)
+    if Calendar.record(stats, day, won) and won then
+        stats.guesses_total = stats.guesses_total + guesses
+        stats.hints_total = stats.hints_total + hints
     end
-    return stats.streak
+    return stats
 end
 
 function Engine.average_guesses(stats)

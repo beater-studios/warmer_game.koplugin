@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2]
+
+- A full refresh every 9 updates in a game and at the end of each one, so a long game no longer builds up ghosting on e-ink.
+- If the game cannot open, a message says so instead of KOReader closing, and the screen rotation is given back.
+- The Back key goes back one screen, and the game closes properly when KOReader quits.
+- Saved games and statistics from any version are read field by field: a damaged game is dropped and the rest stays.
+- A saved daily word that left the vocabulary starts a new game instead of mixing guesses from another word.
+
 ## [0.1.1]
 
 - The Warmer cover on the sleep screen while the game is open.

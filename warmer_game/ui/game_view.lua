@@ -5,6 +5,7 @@ local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local TextWidget = require("ui/widget/textwidget")
+local logger = require("logger")
 
 local Engine = require("warmer_game/engine")
 
@@ -103,7 +104,7 @@ function GameView:compute_layout()
             x = x + action_w + key_gap
         end
         for _, letter in ipairs(letters) do
-            self.keys[#self.keys + 1] = { id = letter, label = letter == "ñ" and "Ñ" or letter:upper(), x = x, y = y, w = key_w, h = key_h }
+            self.keys[#self.keys + 1] = { id = letter, label = Engine.upper(letter), x = x, y = y, w = key_w, h = key_h }
             x = x + key_w + key_gap
         end
         if row_index == 3 then
@@ -309,6 +310,8 @@ function GameView:paint_list(bb)
     end
 end
 
+-- The guesses come from the saved game and the data, so a failure there paints a short message instead,
+-- and the header, the buttons and the keyboard keep working.
 function GameView:paintTo(bb, x, y)
     self.dimen.x, self.dimen.y = x, y
     bb:paintRect(x, y, self.width, self.height, Blitbuffer.COLOR_WHITE)
@@ -316,6 +319,19 @@ function GameView:paintTo(bb, x, y)
     for _, action in ipairs(self.actions) do
         self:paint_button(bb, action)
     end
+    local ok, err = pcall(self.paint_guesses, self, bb)
+    if not ok then
+        logger.warn("warmer_game: could not draw the guesses", err)
+        bb:paintRect(x, y + self.last_y, self.width, self.pager_y + self.pager_h - self.last_y, Blitbuffer.COLOR_WHITE)
+        self:draw_text(bb, self.strings.draw_failed, self.message_face, self.margin, self.last_y, self.width - 2 * self.margin, self.last_h)
+    end
+    if self:keyboard_visible() then
+        self:paint_input(bb)
+        self:paint_keyboard(bb)
+    end
+end
+
+function GameView:paint_guesses(bb)
     if self.list_mode == "closest" then
         self:draw_text(bb, string.format(self.strings.closest_title, self.engine.secret), self.title_face,
             self.margin, self.last_y, self.width - 2 * self.margin, self.last_h)
@@ -332,10 +348,6 @@ function GameView:paintTo(bb, x, y)
             self.margin, self.counts_y, self.width - 2 * self.margin, self.counts_h)
     end
     self:paint_list(bb)
-    if self:keyboard_visible() then
-        self:paint_input(bb)
-        self:paint_keyboard(bb)
-    end
 end
 
 function GameView:paint_input(bb)

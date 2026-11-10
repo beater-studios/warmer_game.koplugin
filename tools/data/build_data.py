@@ -5,6 +5,7 @@ Usage:
     build_data.py <sources> build                     writes data/ and the vectors for each size in build/
 """
 import array
+import datetime
 import gzip
 import math
 import os
@@ -26,6 +27,10 @@ MINIMUM_VOCABULARY = 25000
 CANDIDATES_PER_LANGUAGE = {"pt": 1200, "en": 1400, "es": 1200}
 SECRETS_PER_LANGUAGE = 750
 MINIMUM_SECRETS = 365
+# Same day 0 as warmer_game/calendar.lua. Once the day number passes the list length, any change of length
+# changes the daily word for everyone, so a change needs a year of margin or ALLOW_LENGTH_CHANGE=1.
+EPOCH = datetime.date(2026, 1, 1)
+LENGTH_CHANGE_MARGIN_DAYS = 365
 MINIMUM_SECRET_LENGTH = 3
 SOURCE_DIMENSIONS = 300
 RECOMMENDED_DIMENSIONS = 150
@@ -213,15 +218,30 @@ def candidates(sources, out_dir):
 def build(sources):
     luajit = os.environ.get("LUAJIT", "luajit")
     failed = False
+    today = (datetime.date.today() - EPOCH).days
     for lang in LANGUAGES:
         words, vectors = load_vocabulary(sources, lang)
         excluded = read_excluded(lang)
+        approved = read_approved(lang)
         secrets_path = os.path.join(DATA, lang, "secrets.txt")
         published = read_optional(secrets_path)
+        # Every published word went through review, so the approved list holds all of them.
+        approved_set = set(approved)
+        unapproved = [w for w in published if w not in approved_set]
+        if unapproved:
+            print("  %s: published secret words missing from approved_%s.txt: %s" % (lang, lang, ", ".join(unapproved[:10])))
+            failed = True
+            continue
         usable = set(words) - unreachable_words(words, lang)
-        secrets, shifted = stable_secrets(published, read_approved(lang), excluded, usable, "warmer-" + lang)
+        secrets, shifted = stable_secrets(published, approved, excluded, usable, "warmer-" + lang)
         if shifted:
             print("  %s: removed words without a replacement, the daily word changes from them on" % lang)
+        if published and len(secrets) != len(published) and len(published) <= today + LENGTH_CHANGE_MARGIN_DAYS \
+                and os.environ.get("ALLOW_LENGTH_CHANGE") != "1":
+            print("  %s: the secret list would go from %d to %d words on day %d, changing the daily word for everyone."
+                  " Run again with ALLOW_LENGTH_CHANGE=1 to accept." % (lang, len(published), len(secrets), today))
+            failed = True
+            continue
         write_lines(os.path.join(DATA, lang, "words.txt"), words)
         write_lines(secrets_path, secrets)
         matrix = os.path.join(BUILD, "%s_%d.f32" % (lang, SOURCE_DIMENSIONS))

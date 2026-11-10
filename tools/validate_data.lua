@@ -1,6 +1,7 @@
 -- Usage: luajit tools/validate_data.lua [vectors dir | --no-vectors]
 -- Checks data/<language>/ and, when given, the vectors of another size in <vectors dir>/<language>/vectors.bin.
--- With --no-vectors only the word lists and texts are checked, as in CI, where the vectors are not built.
+-- With --no-vectors only the word lists are checked, as in CI, where the vectors are not built. The texts are
+-- checked by tools/check_texts.lua.
 package.path = "./?.lua;" .. package.path
 local Engine = require("warmer_game/engine")
 local Lexicon = require("warmer_game/lexicon")
@@ -72,24 +73,6 @@ for _, lang in ipairs(Lexicon.LANGUAGES) do
                 end
             end
             print(string.format("%s: %d words, %d secret words, %d dimensions", lang, lexicon:size(), #secrets, vectors.d))
-        end
-    end
-end
-
-local i18n = dofile("data/i18n.lua")
-local reference = i18n.en
-for _, lang in ipairs(Lexicon.LANGUAGES) do
-    local strings = i18n[lang]
-    if not strings then
-        fail("texts missing for " .. lang)
-    else
-        for key, value in pairs(reference) do
-            if strings[key] == nil then fail(string.format("text %s missing in %s", key, lang)) end
-            if type(value) == "string" then
-                local _, expected = value:gsub("%%[ds]", "")
-                local _, found = (strings[key] or ""):gsub("%%[ds]", "")
-                if expected ~= found then fail(string.format("text %s in %s has %d placeholders, expected %d", key, lang, found, expected)) end
-            end
         end
     end
 end

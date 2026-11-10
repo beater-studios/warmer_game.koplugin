@@ -288,11 +288,28 @@ end)
 test("free play avoids upcoming daily words and recent ones", function()
     local secrets = { "a", "b", "c", "d", "e" }
     local avoided = Engine.free_avoided(secrets, 0, 2, { "e" })
-    eq(avoided.a and avoided.b and avoided.c and avoided.e, true)
+    eq(avoided.a, "today")
+    eq(avoided.b, "upcoming")
+    eq(avoided.c, "upcoming")
+    eq(avoided.e, "recent")
     eq(avoided.d, nil)
     eq(Engine.pick_free(secrets, avoided, function(n) return n end), "d")
-    local everything = { a = true, b = true, c = true, d = true, e = true }
-    eq(Engine.pick_free(secrets, everything, function() return 1 end), "a")
+end)
+
+test("with every word avoided, free play takes a recent one before today's word", function()
+    local secrets = { "a", "b", "c" }
+    local avoided = Engine.free_avoided(secrets, 0, 1, { "c" })
+    eq(Engine.pick_free(secrets, avoided, function() return 1 end), "c")
+    local only_today = Engine.free_avoided({ "a" }, 0, 0, {})
+    eq(Engine.pick_free({ "a" }, only_today, function() return 1 end), "a")
+end)
+
+test("a day before the last recorded one is not counted again", function()
+    local stats = Engine.new_stats()
+    Engine.record_result(stats, 10, true, 20, 1)
+    Engine.record_result(stats, 9, true, 5, 0)
+    eq(stats.played, 1)
+    eq(stats.guesses_total, 20)
 end)
 
 test("streak counts consecutive days and resets", function()

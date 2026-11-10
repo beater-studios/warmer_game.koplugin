@@ -63,7 +63,7 @@ Each release has three packages. They play the same game and differ only in the 
 
 To switch packages, extract another one over the same folder. Games in progress keep going, with positions recomputed. The About screen shows which data is installed, and the shared result includes it, so you know whether you are comparing the same ranking.
 
-Progress is stored in `koreader/settings/warmer_game.lua`. To uninstall, delete the plugin folder and, if you wish, that file.
+Progress is stored in `koreader/settings/warmer_game.lua`, and KOReader keeps the previous version next to it as `warmer_game.lua.old`. To uninstall, delete the plugin folder and, if you wish, those two files.
 
 ## How it works
 
@@ -92,12 +92,10 @@ The rules, the data pipeline and the measurements are in [docs/design.md](docs/d
 
 ## Development
 
-With [LuaJIT](https://luajit.org) installed, from the repository root:
+With [LuaJIT](https://luajit.org) installed, from the repository root, the same checks as the CI:
 
 ```sh
-luajit tools/validate_data.lua --no-vectors
-luajit tests/engine_spec.lua
-luajit tests/vectors_spec.lua
+sh tools/check.sh
 ```
 
 The meaning data is not in the repository: `tools/data/fetch_sources.sh` downloads the sources at pinned versions and `tools/data/build_data.py` builds them. The rules, the data, the remaining tools and the release process are described in [docs/design.md](docs/design.md). To suggest removing a word, open an issue. Contributions are accepted under the project's license.

@@ -1,4 +1,3 @@
-local bit = require("bit")
 local Blitbuffer = require("ffi/blitbuffer")
 local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
@@ -16,10 +15,15 @@ local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local logger = require("logger")
 
 local Engine = require("warmer_game/engine")
 local GameView = require("warmer_game/ui/game_view")
 local Lexicon = require("warmer_game/lexicon")
+local Portrait = require("warmer_game/portrait")
+local Refresh = require("warmer_game/refresh")
+local SavedState = require("warmer_game/saved_state")
+local State = require("warmer_game/state")
 local Vectors = require("warmer_game/vectors")
 
 local Device_screen = Device.screen
@@ -40,7 +44,7 @@ end
 
 local function default_language()
     local code = G_reader_settings and G_reader_settings:readSetting("language") or ""
-    local prefix = code:sub(1, 2)
+    local prefix = code:sub(1, 2):lower()
     return LANGUAGE_NAMES[prefix] and prefix or "en"
 end
 
@@ -51,16 +55,17 @@ local Screen = InputContainer:extend{
     plugin_dir = ".",
 }
 
+-- The layout only fits portrait.
 function Screen:init()
-    -- The layout only fits portrait; odd rotation modes are landscape.
-    local rotation = Device_screen:getRotationMode()
-    if bit.band(rotation, 1) == 1 then
-        self.restore_rotation = rotation
-        Device_screen:setRotationMode(Device_screen.DEVICE_ROTATED_UPRIGHT)
-    end
+    Portrait.open(self, self.setup)
+end
+
+function Screen:setup()
     if Device:hasKeys() then
-        self.key_events = { Close = { { Device.input.group.Back } } }
+        self.key_events.Back = { { Device.input.group.Back } }
     end
+    -- Screens are rebuilt whole, so up to 8 updates without a flash, then a full one against ghosting.
+    self.refresh = Refresh.new(8)
     math.randomseed(os.time())
     self.dimen = Geom:new{ x = 0, y = 0, w = Device_screen:getWidth(), h = Device_screen:getHeight() }
     self.width, self.height = self.dimen.w, self.dimen.h
@@ -69,11 +74,27 @@ function Screen:init()
     self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/warmer_game.lua")
     self.meta = load_table(self.plugin_dir .. "/_meta.lua")
     self.i18n = load_table(self.plugin_dir .. "/data/i18n.lua")
-    self.lang = self.settings:readSetting("lang") or default_language()
-    for _, key in ipairs({ "games", "stats", "free_games", "free_stats", "free_recent" }) do
-        self[key] = self.settings:readSetting(key) or {}
-    end
+    local saved = State.load(function(name) return self.settings:readSetting(name) end, logger.warn)
+    self.lang = saved.lang or default_language()
+    self.games = saved.games
+    self.stats = saved.stats
+    self.free_games = saved.free_games
+    self.free_stats = saved.free_stats
+    self.free_recent = saved.free_recent
     self:show_title()
+end
+
+-- Shown by the menu when the screen could not open. The texts file may be what failed, so English is the
+-- last resort.
+function Screen.open_failed_text(plugin_dir)
+    local ok, i18n = pcall(load_table, plugin_dir .. "/data/i18n.lua")
+    if not ok or type(i18n) ~= "table" then
+        return "Warmer could not open. Try restarting KOReader."
+    end
+    local settings_ok, settings = pcall(LuaSettings.open, LuaSettings, DataStorage:getSettingsDir() .. "/warmer_game.lua")
+    local lang = settings_ok and settings:readSetting("lang") or default_language()
+    local texts = i18n[lang] or i18n.en
+    return texts.open_failed
 end
 
 function Screen:scaled(value)
@@ -157,19 +178,21 @@ function Screen:dimensions()
     return self.data and self.data.vectors.d or nil
 end
 
+-- kind names the layout: the same kind again is a change inside it and is updated without a flash.
 -- content_height is read by tools/koreader/check_layout.lua to catch pages taller than the screen.
-function Screen:set_widget(widget, refresh, content_height)
+function Screen:set_widget(widget, kind, content_height)
     if self[1] then
         self[1]:free()
     end
     self.content_height = content_height or widget:getSize().h
     self[1] = widget
+    local mode = self.refresh:mode(kind)
     UIManager:setDirty(self, function()
-        return refresh or "ui", self.dimen
+        return mode, self.dimen
     end)
 end
 
-function Screen:set_page(group, refresh, content_height)
+function Screen:set_page(group, kind, content_height)
     self:set_widget(FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         bordersize = 0,
@@ -178,7 +201,7 @@ function Screen:set_page(group, refresh, content_height)
         width = self.width,
         height = self.height,
         group,
-    }, refresh, content_height or group:getSize().h)
+    }, kind, content_height or group:getSize().h)
 end
 
 function Screen:centered(widget, height)
@@ -236,7 +259,7 @@ function Screen:saved_daily(day)
     end
 end
 
-function Screen:show_title(refresh)
+function Screen:show_title()
     self.mode = "title"
     self.engine, self.view = nil, nil
     local t = self:strings()
@@ -259,7 +282,7 @@ function Screen:show_title(refresh)
     add(self:centered(self:option_row(languages, self.lang, function(value)
         self.lang = value
         self:save()
-        self:show_title("ui")
+        self:show_title()
     end)))
     space(14)
     local stats = self.stats[self.lang] or Engine.new_stats()
@@ -287,7 +310,7 @@ function Screen:show_title(refresh)
         add(self:centered(self:menu_button(item[1], item[2])))
         space(8)
     end
-    self:set_page(CenterContainer:new{ dimen = Geom:new{ w = self.width, h = self.height }, group }, refresh or "full", group:getSize().h)
+    self:set_page(CenterContainer:new{ dimen = Geom:new{ w = self.width, h = self.height }, group }, "title", group:getSize().h)
 end
 
 -- The day is kept when coming back from the statistics, even if the date changed meanwhile.
@@ -298,7 +321,11 @@ function Screen:start_daily(day)
     end
     day = day or Engine.today()
     local saved = self:saved_daily(day)
-    local secret = saved and data.lexicon.index[saved.secret] and saved.secret or Engine.secret_for_day(data.secrets, day)
+    -- A saved secret word that left the vocabulary has no vector: the game starts over with today's word.
+    if saved and not data.lexicon.index[saved.secret] then
+        saved = nil
+    end
+    local secret = saved and saved.secret or Engine.secret_for_day(data.secrets, day)
     self:open_game{ day = day, secret = secret, saved = saved }
 end
 
@@ -321,7 +348,7 @@ function Screen:start_free(new_word)
     end
     local saved = self.free_games[self.lang]
     if new_word or not saved or saved.finished or not data.lexicon.index[saved.secret] then
-        saved = { secret = self:pick_free_word(data), words = {}, hints = {} }
+        saved = { version = State.GAME_VERSION, secret = self:pick_free_word(data), words = {}, hints = {} }
         self.free_games[self.lang] = saved
         self:save()
     end
@@ -340,7 +367,14 @@ function Screen:open_game(opts)
         day = opts.day,
     }
     if opts.saved then
-        self.engine:restore(opts.saved)
+        -- A save that does not fit the data any more gives a new game with the same word.
+        local restored = SavedState.restore(function(saved)
+            self.engine:restore(saved)
+            return true
+        end, opts.saved, logger.warn)
+        if not restored then
+            self.engine = Engine.new{ lexicon = data.lexicon, ranker = self.engine.ranker, secret = opts.secret, day = opts.day }
+        end
     end
     local t = self:strings()
     self.view = GameView:new{
@@ -354,7 +388,9 @@ function Screen:open_game(opts)
     }
     self.view.message = self:status_message()
     self:hide_loading()
-    self:set_widget(self.view, "full")
+    -- Every game opens with a full update, even a new word from the result of the last one.
+    self.refresh:reset()
+    self:set_widget(self.view, "game")
 end
 
 function Screen:status_message()
@@ -375,9 +411,11 @@ function Screen:status_message()
     return t.start_message
 end
 
-function Screen:refresh_game(refresh)
+-- The guess list and the words closest to the secret one are two kinds, so switching between them flashes.
+function Screen:refresh_game(kind)
+    local mode = self.refresh:mode(kind or "game")
     UIManager:setDirty(self, function()
-        return refresh or "ui", self.dimen
+        return mode, self.dimen
     end)
 end
 
@@ -386,12 +424,12 @@ function Screen:on_action(action)
     if action == "back" then
         if view.list_mode == "closest" then
             view:set_list_mode("game")
-            self:refresh_game()
+            self:refresh_game("game")
         else
             self:show_title()
         end
     elseif action == "page" then
-        self:refresh_game()
+        self:refresh_game(view.list_mode)
     elseif action == "type" then
         UIManager:setDirty(self, function()
             return "ui", view:input_rect()
@@ -438,7 +476,7 @@ function Screen:on_action(action)
         end
         view.closest = list
         view:set_list_mode("closest")
-        self:refresh_game("full")
+        self:refresh_game("closest")
     elseif action == "share" then
         local QRMessage = require("ui/widget/qrmessage")
         UIManager:show(QRMessage:new{ text = self.engine:share_text(self:strings(), self:dimensions()) })
@@ -456,7 +494,7 @@ function Screen:after_move()
     if self.free_play then
         -- A finished game is only counted once, even if this runs again (a second confirmation on a slow screen).
         local was_finished = self.free_games[self.lang] and self.free_games[self.lang].secret == engine.secret and self.free_games[self.lang].finished
-        self.free_games[self.lang] = engine:serialize()
+        self.free_games[self.lang] = State.record(engine)
         if engine:is_over() and not was_finished then
             local stats = self.free_stats[self.lang] or { played = 0, won = 0 }
             stats.played = stats.played + 1
@@ -465,7 +503,7 @@ function Screen:after_move()
         end
     else
         local was_finished = self.games[self.lang] and self.games[self.lang].day == engine.day and self.games[self.lang].finished
-        self.games[self.lang] = engine:serialize()
+        self.games[self.lang] = State.record(engine)
         if engine:is_over() and not was_finished then
             local guesses, hints = engine:counts()
             self.stats[self.lang] = Engine.record_result(self.stats[self.lang] or Engine.new_stats(), engine.day, engine:is_won(), guesses, hints)
@@ -476,7 +514,9 @@ function Screen:after_move()
         self.view.message = self:status_message()
         self.view:relayout()
         self.view.page = 1
-        self:refresh_game("full")
+        -- The end of a game always flashes; the guesses before it count towards the next full update.
+        self.refresh:reset()
+        self:refresh_game()
     else
         self:refresh_game()
     end
@@ -538,7 +578,7 @@ function Screen:show_page(title, items, back)
     end
     group[#group + 1] = VerticalSpan:new{ width = self:scaled(6) }
     group[#group + 1] = self:centered(self:menu_button(t.back, back))
-    self:set_page(group, "full")
+    self:set_page(group, "page:" .. title)
 end
 
 function Screen:show_help()
@@ -593,12 +633,10 @@ function Screen:show_stats(back)
     }, back)
 end
 
-function Screen:onSetRotationMode()
-    return true
-end
+Screen.onSetRotationMode = Portrait.ignore_rotation
 
 -- The device Back key goes back one screen, and closes the game from the title screen.
-function Screen:onClose()
+function Screen:onBack()
     if self.mode == "game" then
         self:on_action("back")
     elseif self.mode == "page" then
@@ -609,6 +647,18 @@ function Screen:onClose()
     return true
 end
 
+-- KOReader sends Close to every window before it quits (USB mode on a Kobo, closing the window on a computer).
+function Screen:onClose(arg)
+    if not (arg and arg.keep_screensaver) then
+        UIManager:close(self)
+    end
+end
+
+-- The sleep screen covered everything, so the next update clears the ghosting.
+function Screen:onResume()
+    self.refresh:reset()
+end
+
 function Screen:onCloseWidget()
     if self[1] then
         self[1]:free()
@@ -617,9 +667,7 @@ function Screen:onCloseWidget()
     self.data = nil
     self.engine = nil
     collectgarbage()
-    if self.restore_rotation then
-        Device_screen:setRotationMode(self.restore_rotation)
-    end
+    Portrait.close(self)
     UIManager:setDirty(nil, "full")
 end
 
