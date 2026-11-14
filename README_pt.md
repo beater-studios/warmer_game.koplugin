@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/banner.png" alt="Warmer: descubra a palavra secreta pelo sentido">
+  <img src="docs/brand/banner_pt.png" alt="Warmer: descubra a palavra secreta pelo sentido">
 </p>
 
 <p align="center">

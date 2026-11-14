@@ -1,7 +1,10 @@
 """Draws the icon, the README banner and the GitHub social preview, or with `screensaver` the full-screen sleep screen cover in assets/.
 
-Usage: KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py [screensaver]
+Usage: KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py [screensaver | pt <screens folder>]
 Run tools/koreader/render_screens.lua first. Needs Pillow, and the fonts that come with KOReader.
+With `pt`, draws only the banner and the social preview in Portuguese, as docs/brand/banner_pt.png and
+docs/social-preview_pt.png, from screenshots rendered with
+SCREENS_LANGUAGE=pt OUTPUT_DIR=<screens folder> tools/koreader/run_headless.sh tools/koreader/render_screens.lua.
 """
 import math
 import os
@@ -13,8 +16,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 BLACK, WHITE, FOLD, BAR = 0, 255, 170, 88
 ICON_SIZE = 1024
 SUPERSAMPLE = 3
-TAGLINE = "Find the secret word by its meaning."
-DETAILS = ["A word guessing game for KOReader,", "in Portuguese, English and Spanish.", "Each guess shows how close it is."]
+TEXTS = {
+    "en": ("Find the secret word by its meaning.",
+           ["A word guessing game for KOReader,", "in Portuguese, English and Spanish.", "Each guess shows how close it is."]),
+    "pt": ("Descubra a palavra secreta pelo sentido.",
+           ["Um jogo de adivinhar palavras para o KOReader,", "em português, inglês e espanhol.", "Cada palpite mostra o quão perto está."]),
+}
+SCREENS = os.path.join(ROOT, "docs", "screenshots")
 # The sheet of paper, in icon coordinates, as in the other Beater Studios icons.
 PAGE_LEFT, PAGE_TOP, PAGE_RIGHT, PAGE_BOTTOM, EAR = 222, 130, 802, 894, 170
 # Closeness bars, as in the game: the first one full and black, the others filling less and less.
@@ -69,8 +77,8 @@ def halftone(image, cx, cy, radius, spacing):
         row += 1
 
 
-def place_screen(image, name, center, height, angle):
-    screen = Image.open(os.path.join(ROOT, "docs", "screenshots", name + ".png")).convert("L")
+def place_screen(image, name, center, height, angle, screens=SCREENS):
+    screen = Image.open(os.path.join(screens, name + ".png")).convert("L")
     screen = screen.resize((round(height * screen.width / screen.height), height), Image.LANCZOS)
     framed = Image.new("L", (screen.width + 12, screen.height + 12), WHITE)
     framed.paste(screen, (6, 6))
@@ -78,19 +86,20 @@ def place_screen(image, name, center, height, angle):
     image.paste(rotated.getchannel("L"), (round(center[0] - rotated.width / 2), round(center[1] - rotated.height / 2)), rotated.getchannel("A"))
 
 
-def draw_header(width, height, fonts, icon, layout):
+def draw_header(width, height, fonts, icon, layout, lang="en", screens=SCREENS):
+    tagline, details_text = TEXTS[lang]
     k = 2
     image = Image.new("L", (width * k, height * k), BLACK)
     middle, screen_height, offset, text = layout["middle"], layout["screen_height"], layout["offset"], layout["text"]
     halftone(image, middle * k, height // 2 * k, round(layout["halftone"] * k), 26 * k)
-    place_screen(image, "closest", ((middle - offset) * k, (height // 2 + 8) * k), screen_height * k, 6)
-    place_screen(image, "game", ((middle + offset) * k, (height // 2 - 8) * k), screen_height * k, -5)
+    place_screen(image, "closest", ((middle - offset) * k, (height // 2 + 8) * k), screen_height * k, 6, screens)
+    place_screen(image, "game", ((middle + offset) * k, (height // 2 - 8) * k), screen_height * k, -5, screens)
     margin = 58
     icon_size = round(112 * text)
     title_size = round(68 * text)
     tagline_size = round(24 * text)
     details_size = round(18 * text)
-    details = layout.get("details")
+    details = details_text if layout.get("details") else None
     block = icon_size + title_size + tagline_size + round(44 * text)
     if details:
         block += round(details_size * 1.45 * len(details)) + round(22 * text)
@@ -103,7 +112,7 @@ def draw_header(width, height, fonts, icon, layout):
     d = ImageDraw.Draw(image)
     d.text((margin * k, y * k), "Warmer", font=ImageFont.truetype(fonts["bold"], title_size * k), fill=WHITE)
     y += title_size + round(26 * text)
-    d.text((margin * k, y * k), TAGLINE, font=ImageFont.truetype(fonts["italic"], tagline_size * k), fill=WHITE)
+    d.text((margin * k, y * k), tagline, font=ImageFont.truetype(fonts["italic"], tagline_size * k), fill=WHITE)
     y += tagline_size + round(30 * text)
     if details:
         font = ImageFont.truetype(fonts["regular"], details_size * k)
@@ -143,14 +152,22 @@ def main():
     brand = os.path.join(ROOT, "docs", "brand")
     os.makedirs(brand, exist_ok=True)
     icon = draw_icon()
+    banner = {"middle": 1000, "screen_height": 330, "offset": 110, "text": 1, "halftone": 280}
+    social = {"middle": 960, "screen_height": 430, "offset": 112, "text": 1.02, "halftone": 360, "details": True}
+    if sys.argv[1:2] == ["pt"] and len(sys.argv) == 3:
+        os.makedirs(brand, exist_ok=True)
+        draw_header(1280, 400, fonts, icon, banner, "pt", sys.argv[2]).save(os.path.join(brand, "banner_pt.png"), optimize=True)
+        draw_header(1280, 640, fonts, icon, social, "pt", sys.argv[2]).save(os.path.join(ROOT, "docs", "social-preview_pt.png"), optimize=True)
+        print("Images generated in docs/brand/banner_pt.png and docs/social-preview_pt.png")
+        return
     if sys.argv[1:] == ["screensaver"]:
         os.makedirs(os.path.join(ROOT, "assets"), exist_ok=True)
         draw_screensaver(fonts, icon).save(os.path.join(ROOT, "assets", "screensaver.png"), optimize=True)
         print("Image generated in assets/screensaver.png")
         return
     icon.save(os.path.join(brand, "icon.png"), optimize=True)
-    draw_header(1280, 400, fonts, icon, {"middle": 1000, "screen_height": 330, "offset": 110, "text": 1, "halftone": 280}).save(os.path.join(brand, "banner.png"), optimize=True)
-    draw_header(1280, 640, fonts, icon, {"middle": 960, "screen_height": 430, "offset": 112, "text": 1.02, "halftone": 360, "details": DETAILS}).save(os.path.join(ROOT, "docs", "social-preview.png"), optimize=True)
+    draw_header(1280, 400, fonts, icon, banner).save(os.path.join(brand, "banner.png"), optimize=True)
+    draw_header(1280, 640, fonts, icon, social).save(os.path.join(ROOT, "docs", "social-preview.png"), optimize=True)
     print("Images generated in docs/brand and docs/social-preview.png")
 
 

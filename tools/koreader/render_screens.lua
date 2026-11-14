@@ -1,4 +1,5 @@
--- Renders the README screenshots with a free play game whose secret word is not a daily word.
+-- Renders the README screenshots with a free play game whose secret word is not a daily word. SCREENS_LANGUAGE=pt
+-- renders them in Portuguese, for the Portuguese social preview made by tools/make_brand_art.py.
 local plugin_dir = assert(os.getenv("PLUGIN_DIR"))
 local out_dir = assert(os.getenv("OUTPUT_DIR"))
 
@@ -6,7 +7,13 @@ require("setupkoenv")
 local DataStorage = require("datastorage")
 G_defaults = require("luadefaults"):open()
 G_reader_settings = require("luasettings"):open(DataStorage:getDataDir() .. "/settings.reader.lua")
-G_reader_settings:saveSetting("language", "en_US")
+local SCREENS = {
+    en = { setting = "en_US", secret = "guitar", guesses = { "house", "song", "wood", "sound", "drum", "music", "string", "band", "dance", "radio", "concert" } },
+    pt = { setting = "pt_BR", secret = "violão", guesses = { "casa", "canção", "madeira", "som", "tambor", "música", "corda", "banda", "dança", "rádio", "concerto" } },
+}
+local lang = os.getenv("SCREENS_LANGUAGE") or "en"
+local screens = assert(SCREENS[lang], "SCREENS_LANGUAGE must be en or pt")
+G_reader_settings:saveSetting("language", screens.setting)
 package.path = plugin_dir .. "/?.lua;" .. package.path
 
 local Device = require("device")
@@ -16,8 +23,8 @@ local UIManager = require("ui/uimanager")
 UIManager:init()
 local GameScreen = require("warmer_game/ui/screen")
 
-local SECRET = "guitar"
-local GUESSES = { "house", "song", "wood", "sound", "drum", "music", "string", "band", "dance", "radio", "concert" }
+local SECRET = screens.secret
+local GUESSES = screens.guesses
 
 local function shot(name)
     UIManager:forceRePaint()
@@ -33,7 +40,7 @@ local data = game:language_data()
 for _, word in ipairs(data.secrets) do
     assert(word ~= SECRET, "the screenshot word must not be a daily word")
 end
-game.free_games.en = { secret = SECRET, words = {}, hints = {} }
+game.free_games[lang] = { secret = SECRET, words = {}, hints = {} }
 game:start_free()
 for _, word in ipairs(GUESSES) do
     game.engine:guess(word)
